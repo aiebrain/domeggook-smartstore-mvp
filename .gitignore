@@ -1,0 +1,28 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Local runtime/test artifacts that may include seller-center screenshots, page state, or large generated outputs
+artifacts/
+logs/
+*.log
+backend/tmp_*.py
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Local agent/operator state
+.agent/
+.codex
+.omx/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

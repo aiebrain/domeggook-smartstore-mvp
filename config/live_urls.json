@@ -1,0 +1,49 @@
+{
+  "urls": [
+    {
+      "url": "https://domeggook.com/54804743",
+      "label": "텀블러 - 추천상품 블록과 외부 상세 이미지 혼재",
+      "expect": {
+        "min_detail_images": 10,
+        "min_price_tiers": 3,
+        "thumbnail_required": true
+      }
+    },
+    {
+      "url": "https://domeggook.com/65197944?advcnt=mainCenter2024",
+      "label": "의류 - 외부 에디터 CDN 상세 이미지",
+      "expect": {
+        "min_detail_images": 1,
+        "min_price_tiers": 3,
+        "thumbnail_required": true
+      }
+    },
+    {
+      "url": "https://domeggook.com/59842602",
+      "label": "텀블러 관련 상품 - 도매꾹 추천 노출 상품",
+      "expect": {
+        "min_detail_images": 1,
+        "min_price_tiers": 1,
+        "thumbnail_required": true
+      }
+    },
+    {
+      "url": "https://domeggook.com/26811232",
+      "label": "기존 테스트 후보 상품",
+      "expect": {
+        "min_detail_images": 1,
+        "min_price_tiers": 1,
+        "thumbnail_required": true
+      }
+    },
+    {
+      "url": "https://domeggook.com/62893008",
+      "label": "텀블러 관련 상품 - 가격/이미지 구조 비교",
+      "expect": {
+        "min_detail_images": 1,
+        "min_price_tiers": 1,
+        "thumbnail_required": true
+      }
+    }
+  ]
+}
