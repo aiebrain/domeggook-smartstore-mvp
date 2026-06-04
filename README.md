@@ -1,80 +1,155 @@
-# Domeggook to SmartStore MVP
+# Domeggook → Naver SmartStore Registration Prep MVP
 
-도매꾹 상품 URL을 분석해 네이버 스마트스토어 등록 준비 패키지를 만들고, 판매자센터 브라우저 하네스로 등록 화면 입력/미리보기 직전 검증까지 수행하는 MVP입니다.
+[![CI](https://github.com/aiebrain/domeggook-smartstore-mvp/actions/workflows/ci.yml/badge.svg)](https://github.com/aiebrain/domeggook-smartstore-mvp/actions/workflows/ci.yml)
 
-> Safety boundary: 이 프로젝트의 브라우저 하네스는 스마트스토어 `저장` / `임시저장` 버튼을 누르지 않고, 미리보기 또는 검수 지점에서 멈추도록 설계했습니다.
+도매꾹 상품 URL 또는 저장 HTML을 분석해 네이버 스마트스토어 상품등록 준비 패키지를 만들고, 선택적으로 판매자센터 브라우저 화면에 입력해 `저장` 없이 미리보기/검수 지점까지만 확인하는 로컬 우선 MVP입니다.
 
-## 주요 기능
+English summary: A local-first MVP that extracts product data from Domeggook pages, builds a Naver SmartStore registration-prep package, and optionally drives a browser harness up to preview/checkpoint without clicking Save or Temporary Save.
 
-- Domeggook 상품 URL 정규화 및 상품번호 추출
-- 저장된 HTML 또는 라이브 HTTP fetch 기반 상품 정보 추출
-- 추출 필드
-  - 상품번호, 원상품명, 판매자명, 카테고리
-  - 가격 구간, 최소구매수량, 재고, 원산지
-  - 배송 요약, 옵션, 대표 이미지, 상세 이미지, 이미지 사용 허용 여부, 경고
-- 스마트스토어 등록 준비 패키지 생성
-  - 상품명 후보
-  - 판매가 후보
-  - 재고수량 후보
-  - 대표이미지 / 상세 HTML
-  - 태그 / 검색설정 태그
-  - QA 플래그 / 사람 확인 항목
-- 브라우저 하네스 기반 스마트스토어 입력 검증
-  - 판매가 / 재고수량 DOM 최종 확인
-  - 상세설명은 SmartEditor ONE 대신 `HTML 작성` 탭 직접 입력
-  - 추가이미지는 업로드하지 않고 대표이미지만 사용
-  - 원산지 국산/수입산/아시아/중국 Selectize 자동 선택
-  - 미리보기 전 저장/임시저장 미클릭 보장
+## What this project is
 
-## API
+이 프로젝트는 “스마트스토어 자동 등록기”가 아니라 “등록 준비 + 안전한 미리보기 검증 도구”입니다.
 
-- `GET /health`
-- `POST /api/analyze`
-  - body: `{ "url": "https://domeggook.com/...", "html": "optional saved html" }`
-- `POST /api/browser-preview`
-  - 분석 패키지를 바탕으로 스마트스토어 판매자센터 브라우저 화면에 입력하고, 저장하지 않은 채 미리보기/검수 단계에서 멈춥니다.
+- Analyze Domeggook product pages or pasted HTML.
+- Produce a SmartStore-oriented registration package.
+- Help sellers review sale price, stock, origin, images, detail HTML, tags, and missing fields.
+- Optionally fill the SmartStore seller-center form through a browser harness.
+- Stop before any irreversible action.
 
-## 백엔드 설치 및 테스트
+## Safety boundary
+
+The browser harness is designed to stop before publishing.
+
+- Does not click `저장` / Save.
+- Does not click `임시저장` / Temporary save.
+- Stops at preview/checkpoint when possible.
+- Keeps human review items visible instead of fabricating missing data.
+- Excludes local seller-center screenshots and runtime artifacts from the public repository.
+
+Use this repository responsibly. Marketplace UI automation may be restricted by platform terms, account permissions, rate limits, or local law. Operators are responsible for final review and compliance.
+
+## Core features
+
+- Domeggook URL normalization and product number extraction.
+- Product extraction from live HTTP fetch or pasted/saved HTML.
+- Extracted fields:
+  - product number, original name, seller name, category path
+  - price tiers, minimum order quantity, stock, origin
+  - delivery summary, options, thumbnail, detail images
+  - detail-image usage warnings and QA flags
+- SmartStore package builder:
+  - product title candidate
+  - recommended sale price
+  - stock quantity candidate
+  - representative image
+  - detail HTML
+  - search tags
+  - human review fields
+- Browser harness preview flow:
+  - sale price / stock DOM verification
+  - HTML-tab-first detail description entry
+  - representative image only; no optional image upload
+  - origin selectize handling for domestic/imported products
+  - final save/temporary-save stop boundary
+
+## Repository structure
+
+```text
+backend/                 FastAPI backend, extraction, package builder, browser harness logic
+frontend/                Next.js local UI
+docs/                    Public documentation and operator guides
+config/live_urls.json    Non-secret public sample/test URL list
+scripts/                 Small helper scripts for local testing
+.github/workflows/       CI workflow
+```
+
+## Requirements
+
+Minimum local stack:
+
+- Python 3.11+
+- Node.js 20+
+- npm
+- Optional: `uv` for fast Python test runs
+- Optional browser harness setup for seller-center preview automation
+
+The core analyzer works without SmartStore login. Browser-preview mode requires a local browser/CDP setup and the `browser-harness-win` command or `BROWSER_HARNESS_WIN_BIN` environment variable.
+
+## Quick start
+
+Clone:
+
+```bash
+git clone https://github.com/aiebrain/domeggook-smartstore-mvp.git
+cd domeggook-smartstore-mvp
+```
+
+Backend:
 
 ```bash
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Hermes/uv 환경에서는 다음처럼도 실행할 수 있습니다.
+Frontend in another terminal:
+
+```bash
+cd frontend
+npm install
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+Click `샘플 HTML 불러오기` in the UI to run a deterministic local demo without live crawling.
+
+## Test and verification
+
+Backend tests:
+
+```bash
+cd backend
+python -m pytest -q
+```
+
+or with uv:
 
 ```bash
 cd backend
 uv run --with-requirements requirements.txt pytest -q
 ```
 
-## 백엔드 실행
-
-```bash
-cd backend
-.venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-## 프론트엔드 설치, 테스트, 실행
+Frontend typecheck:
 
 ```bash
 cd frontend
 npm install
 npm run typecheck
-npm run dev
 ```
 
-프론트엔드는 기본적으로 `http://localhost:8000` 백엔드에 연결합니다. 다른 주소를 쓰려면 실행 전에 환경 변수를 설정하세요.
+Full frontend build test:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+cd frontend
+npm run test
 ```
 
-브라우저에서 `http://localhost:3000`을 열고 `샘플 HTML 불러오기`를 누르면 라이브 크롤링 없이 데모 분석을 실행할 수 있습니다.
+## API
 
-## API 예시
+Health:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Analyze a live URL:
 
 ```bash
 curl -X POST http://localhost:8000/api/analyze \
@@ -82,7 +157,7 @@ curl -X POST http://localhost:8000/api/analyze \
   -d '{"url":"https://domeggook.com/54804743"}'
 ```
 
-결정적 테스트나 크롤링 차단 회피를 위해 HTML을 직접 전달할 수 있습니다.
+Analyze pasted HTML:
 
 ```bash
 curl -X POST http://localhost:8000/api/analyze \
@@ -90,40 +165,86 @@ curl -X POST http://localhost:8000/api/analyze \
   -d '{"url":"https://domeggook.com/54804743", "html":"<html>...</html>"}'
 ```
 
-## 브라우저 하네스 검증 요약
+Browser preview endpoint:
 
-브라우저 하네스를 실행하려면 `browser-harness-win`이 `PATH`에 있거나 다음 환경변수를 지정해야 합니다.
+```text
+POST /api/smartstore/browser-preview
+```
+
+See `docs/API.md` for request/response notes.
+
+## Optional browser harness setup
+
+Browser preview mode requires a local harness executable and a reachable Chrome DevTools Protocol endpoint.
+
+Example:
 
 ```bash
 export BROWSER_HARNESS_WIN_BIN=/path/to/browser-harness-win
-export BU_CDP_URL=http://<windows-host-or-localhost>:9223
+export BU_CDP_URL=http://127.0.0.1:9223
 ```
 
-최근 5개 상품 반복 검증 결과, 판매가/재고수량/상세 HTML 입력과 SmartEditor ONE 미실행, 저장/임시저장 미클릭 경계가 통과했습니다.
+In WSL/Windows setups, `BU_CDP_URL` may need to point to the Windows host IP or a forwarded localhost port. Keep this as an environment variable; do not hardcode private machine IPs in public code.
 
-| 상품번호 | 상태 | 판매가 | 재고수량 | 상세 HTML | SmartEditor ONE | 저장/임시저장 |
-|---|---|---:|---:|---|---|---|
-| 23824901 | PREVIEW_OPENED | 300 | 158282 | OK | 미실행 | 미클릭 |
-| 58088773 | PREVIEW_OPENED | 7200 | 45914 | OK | 미실행 | 미클릭 |
-| 54804743 | PREVIEW_OPENED | 7700 | 12440 | OK | 미실행 | 미클릭 |
-| 35444818 | PARTIAL | 8500 | 981 | OK | 미실행 | 미클릭 |
-| 65197944 | PREVIEW_OPENED | 15100 | 3992 | OK | 미실행 | 미클릭 |
+See `docs/OPERATOR_GUIDE.md` and `docs/SAFETY_AND_COMPLIANCE.md` before using the browser harness on a real account.
 
-`35444818`은 화장품 카테고리 권한 신청 모달 때문에 미리보기만 차단되었고, 판매가/재고/HTML 입력 자체는 통과했습니다.
+## Verified harness snapshot
 
-## 주의사항
+A local five-product harness pass verified sale price, stock, detail HTML, SmartEditor ONE non-use, and save/temporary-save non-clicking. One cosmetics-category item was blocked by a seller-permission modal after core fields were filled.
 
-- 이 코드는 판매자센터 UI 자동화를 포함하므로 실제 계정/정책/권한 상태에 따라 동작이 달라질 수 있습니다.
-- 저장/임시저장은 자동 클릭하지 않도록 설계되어 있지만, 운영 전에는 반드시 테스트 계정/검수 환경에서 확인하세요.
-- 수입산 상품의 `원산지 수입사`는 원문 또는 사용자가 확인한 값이 없으면 자동 생성하지 않고 확인 항목으로 남깁니다.
-- 라이브 도매꾹 DOM은 변경될 수 있으므로 파서는 보수적으로 추출하고 누락 필드는 warnings/QA flags로 전달합니다.
+Detailed history: `docs/registration-harness-history.md`.
 
-## 공개 저장소 제외 항목
+## Environment variables
 
-다음 항목은 `.gitignore`로 제외합니다.
+Copy `.env.example` only when you need local overrides.
 
-- 로컬 실행 결과 `artifacts/`
-- 판매자센터 스크린샷/결과 JSON
-- 로그 `logs/`, `*.log`
+```bash
+cp .env.example .env
+```
+
+Important variables:
+
+- `NEXT_PUBLIC_API_BASE_URL`: frontend → backend URL.
+- `BROWSER_HARNESS_WIN_BIN`: optional browser harness executable path.
+- `BU_CDP_URL`: optional Chrome DevTools endpoint.
+
+No API keys are required for the core local analyzer.
+
+## Public-distribution exclusions
+
+The public repository intentionally excludes:
+
 - `.env`, `.env.*`
-- `.next/`, `.pytest_cache/`, `__pycache__/`, `node_modules/`
+- runtime screenshots and seller-center artifacts under `artifacts/`
+- logs under `logs/`
+- `.next/`, `node_modules/`, `.pytest_cache/`, `__pycache__/`, local virtualenvs
+- local agent/operator state such as `.agent/`, `.codex`, `.omx/`
+
+## Roadmap
+
+- Importer-name field support for imported-origin products, without fabricating missing importer data.
+- Stronger SmartStore tag acceptance diagnostics.
+- Category permission modal classification.
+- Docker/local compose option.
+- More deterministic fixture coverage for Domeggook DOM variants.
+
+## Documentation
+
+- `docs/INSTALLATION.md` — detailed setup guide.
+- `docs/OPERATOR_GUIDE.md` — local operation workflow.
+- `docs/API.md` — API notes.
+- `docs/SAFETY_AND_COMPLIANCE.md` — safety boundary and compliance notes.
+- `docs/DISTRIBUTION_CHECKLIST.md` — release checklist.
+- `docs/registration-harness-history.md` — implementation/verification history.
+
+## Contributing
+
+Contributions are welcome. Read `CONTRIBUTING.md` before opening a pull request.
+
+## Security
+
+Do not open public issues containing account data, marketplace screenshots, cookies, tokens, private seller-center output, or customer/order data. See `SECURITY.md`.
+
+## License
+
+MIT License. See `LICENSE`.
