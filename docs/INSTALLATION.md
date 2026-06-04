@@ -87,7 +87,21 @@ export BROWSER_HARNESS_WIN_BIN=/path/to/browser-harness-win
 export BU_CDP_URL=http://127.0.0.1:9223
 ```
 
-Then run the backend and frontend normally. The UI can call:
+Then run the backend and frontend normally. Before calling preview automation, check readiness:
+
+```text
+GET /api/smartstore/browser-harness/status
+```
+
+CLI example:
+
+```bash
+curl http://localhost:8000/api/smartstore/browser-harness/status
+```
+
+Only click the UI preview button or call the preview endpoint when the response status is `READY`.
+
+The UI can then call:
 
 ```text
 POST /api/smartstore/browser-preview

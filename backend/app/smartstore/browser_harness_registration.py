@@ -13,9 +13,17 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.models import BrowserPreviewRequest, BrowserPreviewResponse, SmartStorePackage
+from app.models import BrowserHarnessStatusResponse, BrowserPreviewRequest, BrowserPreviewResponse, SmartStorePackage
 
 SMARTSTORE_CREATE_URL = "https://sell.smartstore.naver.com/#/products/create"
+DEFAULT_CDP_URL = "http://127.0.0.1:9223"
+HARNESS_SETUP_STEPS = [
+    "Install browser-harness and make browser-harness-win available on PATH, or set BROWSER_HARNESS_WIN_BIN=/absolute/path/to/browser-harness-win.",
+    "Start Chrome/Edge with a reachable Chrome DevTools Protocol endpoint.",
+    "Set BU_CDP_URL to that endpoint, for example http://127.0.0.1:9223 or a WSL-to-Windows proxy URL.",
+    "Log in to Naver SmartStore seller-center in that browser before running browser preview.",
+    "Verify with: browser-harness-win <<'PY' then print(page_info()) then PY.",
+]
 RESULT_MARKER = "__SMARTSTORE_HARNESS_RESULT__"
 WINDOWS_TEMP_ROOT = Path("/mnt/c/Temp/smartstore-harness")
 IMAGE_SUFFIX_BY_CONTENT_TYPE = {
@@ -154,6 +162,103 @@ def _browser_payload(
         "blockers": package.registration_gate.blockers,
         "registration_status": package.registration_status,
     }
+
+
+def _resolve_harness_bin() -> str | None:
+    return os.environ.get("BROWSER_HARNESS_WIN_BIN") or shutil.which("browser-harness-win")
+
+
+def _resolve_cdp_url() -> str:
+    return os.environ.get("BU_CDP_URL", DEFAULT_CDP_URL)
+
+
+def check_browser_harness_readiness(timeout_seconds: int = 12) -> BrowserHarnessStatusResponse:
+    cdp_url = _resolve_cdp_url()
+    harness_bin = _resolve_harness_bin()
+    if not harness_bin:
+        return BrowserHarnessStatusResponse(
+            status="NOT_CONFIGURED",
+            message="browser-harness-win 실행 파일을 찾지 못했습니다. PATH에 추가하거나 BROWSER_HARNESS_WIN_BIN 환경변수를 설정하세요.",
+            harness_bin=None,
+            cdp_url=cdp_url,
+            setup_steps=HARNESS_SETUP_STEPS,
+        )
+
+    try:
+        version_response = httpx.get(f"{cdp_url.rstrip('/')}/json/version", timeout=3.0)
+        version_response.raise_for_status()
+        version_payload = version_response.json()
+    except Exception as exc:
+        return BrowserHarnessStatusResponse(
+            status="CDP_UNREACHABLE",
+            message=f"Chrome DevTools endpoint에 연결하지 못했습니다: {type(exc).__name__}: {exc}",
+            harness_bin=harness_bin,
+            cdp_url=cdp_url,
+            setup_steps=HARNESS_SETUP_STEPS,
+        )
+
+    env = os.environ.copy()
+    env.setdefault("BU_CDP_URL", cdp_url)
+    smoke_script = "print(page_info())\n"
+    try:
+        proc = subprocess.run(
+            [harness_bin],
+            input=smoke_script,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout_seconds,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        return BrowserHarnessStatusResponse(
+            status="HARNESS_ERROR",
+            message=f"browser-harness smoke test가 {timeout_seconds}초 안에 끝나지 않았습니다.",
+            harness_bin=harness_bin,
+            cdp_url=cdp_url,
+            browser=version_payload.get("Browser"),
+            setup_steps=HARNESS_SETUP_STEPS,
+        )
+    except Exception as exc:
+        return BrowserHarnessStatusResponse(
+            status="HARNESS_ERROR",
+            message=f"browser-harness 실행에 실패했습니다: {type(exc).__name__}: {exc}",
+            harness_bin=harness_bin,
+            cdp_url=cdp_url,
+            browser=version_payload.get("Browser"),
+            setup_steps=HARNESS_SETUP_STEPS,
+        )
+
+    output = (proc.stdout + "\n" + proc.stderr).strip()
+    if proc.returncode != 0:
+        return BrowserHarnessStatusResponse(
+            status="HARNESS_ERROR",
+            message=f"browser-harness smoke test가 실패했습니다. exit={proc.returncode}, output={output[-1000:]}",
+            harness_bin=harness_bin,
+            cdp_url=cdp_url,
+            browser=version_payload.get("Browser"),
+            setup_steps=HARNESS_SETUP_STEPS,
+        )
+
+    page_info_line = next((line for line in output.splitlines() if line.strip().startswith("{") and "'url'" in line), "")
+    current_url = None
+    page_title = None
+    if page_info_line:
+        current_url_match = re.search(r"'url': '([^']*)'", page_info_line)
+        page_title_match = re.search(r"'title': '([^']*)'", page_info_line)
+        current_url = current_url_match.group(1) if current_url_match else None
+        page_title = page_title_match.group(1) if page_title_match else None
+
+    return BrowserHarnessStatusResponse(
+        status="READY",
+        message="browser-harness와 Chrome DevTools endpoint가 정상 동작합니다. 스마트스토어 preview 기능을 사용할 수 있습니다.",
+        harness_bin=harness_bin,
+        cdp_url=cdp_url,
+        browser=version_payload.get("Browser"),
+        current_url=current_url,
+        page_title=page_title,
+        setup_steps=[],
+    )
 
 
 def _harness_script(payload_path: str) -> str:
@@ -1458,8 +1563,8 @@ async def run_browser_preview(request: BrowserPreviewRequest) -> BrowserPreviewR
         payload_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         script = _harness_script(str(payload_path))
         env = os.environ.copy()
-        env.setdefault("BU_CDP_URL", "http://127.0.0.1:9223")
-        harness_bin = os.environ.get("BROWSER_HARNESS_WIN_BIN") or shutil.which("browser-harness-win")
+        env.setdefault("BU_CDP_URL", _resolve_cdp_url())
+        harness_bin = _resolve_harness_bin()
         if not harness_bin:
             return BrowserPreviewResponse(
                 status="ERROR",

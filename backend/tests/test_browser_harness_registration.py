@@ -2,11 +2,13 @@ from pathlib import Path
 
 from app.extractor.domeggook import parse_product_html
 from app.smartstore.browser_harness_registration import (
+    HARNESS_SETUP_STEPS,
     _browser_payload,
     _harness_script,
     _prepare_upload_payload,
     _resolve_image_suffix,
     _to_browser_upload_path,
+    check_browser_harness_readiness,
 )
 from app.smartstore.package_builder import build_smartstore_package
 from tests.test_extractor import SAMPLE_HTML
@@ -117,3 +119,56 @@ def test_harness_script_targets_collected_registration_fields():
     assert "iframe" in script
     assert "상품 등록권한 신청이 필요합니다" in script
     assert "구매대행 판매" in script
+
+
+def test_browser_harness_readiness_reports_missing_executable(monkeypatch):
+    monkeypatch.delenv("BROWSER_HARNESS_WIN_BIN", raising=False)
+    monkeypatch.setattr("app.smartstore.browser_harness_registration.shutil.which", lambda _name: None)
+
+    result = check_browser_harness_readiness()
+
+    assert result.status == "NOT_CONFIGURED"
+    assert result.harness_bin is None
+    assert result.setup_steps == HARNESS_SETUP_STEPS
+
+
+def test_browser_harness_readiness_reports_ready(monkeypatch):
+    class FakeVersionResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"Browser": "Chrome/120.0.0.0"}
+
+    class FakeCompletedProcess:
+        returncode = 0
+        stdout = "{'url': 'https://sell.smartstore.naver.com/#/products/create', 'title': '네이버 스마트스토어센터', 'w': 1200, 'h': 800}\n"
+        stderr = ""
+
+    monkeypatch.setenv("BROWSER_HARNESS_WIN_BIN", "/usr/local/bin/browser-harness-win")
+    monkeypatch.setenv("BU_CDP_URL", "http://127.0.0.1:9223")
+    monkeypatch.setattr("app.smartstore.browser_harness_registration.httpx.get", lambda *_args, **_kwargs: FakeVersionResponse())
+    monkeypatch.setattr("app.smartstore.browser_harness_registration.subprocess.run", lambda *_args, **_kwargs: FakeCompletedProcess())
+
+    result = check_browser_harness_readiness()
+
+    assert result.status == "READY"
+    assert result.browser == "Chrome/120.0.0.0"
+    assert result.current_url == "https://sell.smartstore.naver.com/#/products/create"
+    assert result.page_title == "네이버 스마트스토어센터"
+    assert result.setup_steps == []
+
+
+def test_browser_harness_readiness_reports_cdp_unreachable(monkeypatch):
+    def fake_get(*_args, **_kwargs):
+        raise RuntimeError("connection refused")
+
+    monkeypatch.setenv("BROWSER_HARNESS_WIN_BIN", "/usr/local/bin/browser-harness-win")
+    monkeypatch.setenv("BU_CDP_URL", "http://127.0.0.1:9223")
+    monkeypatch.setattr("app.smartstore.browser_harness_registration.httpx.get", fake_get)
+
+    result = check_browser_harness_readiness()
+
+    assert result.status == "CDP_UNREACHABLE"
+    assert "connection refused" in result.message
+    assert result.setup_steps == HARNESS_SETUP_STEPS

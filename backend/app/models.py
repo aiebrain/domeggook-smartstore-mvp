@@ -161,6 +161,18 @@ class AnalyzeResponse(BaseModel):
 
 
 BrowserPreviewStatus = Literal["PREVIEW_OPENED", "PARTIAL", "NEED_LOGIN", "BLOCKED", "ERROR"]
+BrowserHarnessReadinessStatus = Literal["READY", "NOT_CONFIGURED", "CDP_UNREACHABLE", "HARNESS_ERROR"]
+
+
+class BrowserHarnessStatusResponse(BaseModel):
+    status: BrowserHarnessReadinessStatus
+    message: str
+    harness_bin: Optional[str] = None
+    cdp_url: str
+    browser: Optional[str] = None
+    current_url: Optional[str] = None
+    page_title: Optional[str] = None
+    setup_steps: list[str] = Field(default_factory=list)
 
 
 class BrowserPreviewRequest(BaseModel):

@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.extractor.domeggook import DomeggookParseError, fetch_product_html, parse_product_html
 from app.logging_utils import LOG_FILE, configure_logging, write_json_log
-from app.models import AnalyzeRequest, AnalyzeResponse, BrowserPreviewRequest, BrowserPreviewResponse
-from app.smartstore.browser_harness_registration import run_browser_preview
+from app.models import AnalyzeRequest, AnalyzeResponse, BrowserHarnessStatusResponse, BrowserPreviewRequest, BrowserPreviewResponse
+from app.smartstore.browser_harness_registration import check_browser_harness_readiness, run_browser_preview
 from app.smartstore.package_builder import build_smartstore_package
 
 logger = configure_logging()
@@ -82,6 +82,22 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     except Exception as exc:
         write_json_log(logger, "analyze_error", url=request.url, error_type=type(exc).__name__, detail=str(exc))
         raise HTTPException(status_code=502, detail=f"Extraction failed: {exc}") from exc
+
+
+@app.get("/api/smartstore/browser-harness/status", response_model=BrowserHarnessStatusResponse)
+def smartstore_browser_harness_status() -> BrowserHarnessStatusResponse:
+    result = check_browser_harness_readiness()
+    write_json_log(
+        logger,
+        "smartstore_browser_harness_status",
+        status=result.status,
+        harness_bin=result.harness_bin,
+        cdp_url=result.cdp_url,
+        browser=result.browser,
+        current_url=result.current_url,
+        page_title=result.page_title,
+    )
+    return result
 
 
 @app.post("/api/smartstore/browser-preview", response_model=BrowserPreviewResponse)

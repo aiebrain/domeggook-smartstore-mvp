@@ -55,6 +55,47 @@ curl -X POST http://localhost:8000/api/analyze \
   -d '{"url":"https://domeggook.com/54804743"}'
 ```
 
+## GET /api/smartstore/browser-harness/status
+
+Checks whether optional SmartStore browser-preview automation is usable on the current machine.
+
+This endpoint does all of the following:
+
+- resolves `browser-harness-win` from `BROWSER_HARNESS_WIN_BIN` or `PATH`
+- checks `BU_CDP_URL` or the default `http://127.0.0.1:9223`
+- calls Chrome DevTools `/json/version`
+- runs a `page_info()` smoke test through browser-harness
+
+Example:
+
+```bash
+curl http://localhost:8000/api/smartstore/browser-harness/status
+```
+
+Success response:
+
+```json
+{
+  "status": "READY",
+  "message": "browser-harness와 Chrome DevTools endpoint가 정상 동작합니다. 스마트스토어 preview 기능을 사용할 수 있습니다.",
+  "harness_bin": "/path/to/browser-harness-win",
+  "cdp_url": "http://127.0.0.1:9223",
+  "browser": "Chrome/...",
+  "current_url": "https://sell.smartstore.naver.com/...",
+  "page_title": "네이버 스마트스토어센터",
+  "setup_steps": []
+}
+```
+
+Possible `status` values:
+
+- `READY`: browser harness is usable.
+- `NOT_CONFIGURED`: `browser-harness-win` was not found.
+- `CDP_UNREACHABLE`: Chrome DevTools endpoint did not respond.
+- `HARNESS_ERROR`: CDP responded but the harness smoke test failed.
+
+When status is not `READY`, show `message` and `setup_steps` to the operator.
+
 ## POST /api/smartstore/browser-preview
 
 Runs the optional browser harness preview flow.

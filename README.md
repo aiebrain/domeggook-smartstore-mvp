@@ -168,20 +168,65 @@ curl -X POST http://localhost:8000/api/analyze \
 Browser preview endpoint:
 
 ```text
+GET  /api/smartstore/browser-harness/status
 POST /api/smartstore/browser-preview
 ```
+
+Use the status endpoint before preview automation. It returns one of:
+
+- `READY`: `browser-harness-win`, `BU_CDP_URL`, Chrome CDP, and `page_info()` smoke test passed.
+- `NOT_CONFIGURED`: `browser-harness-win` was not found. Install it or set `BROWSER_HARNESS_WIN_BIN`.
+- `CDP_UNREACHABLE`: Chrome DevTools endpoint is not reachable. Start Chrome with remote debugging or fix the WSL/Windows proxy.
+- `HARNESS_ERROR`: executable exists and CDP responds, but the harness smoke test failed.
 
 See `docs/API.md` for request/response notes.
 
 ## Optional browser harness setup
 
-Browser preview mode requires a local harness executable and a reachable Chrome DevTools Protocol endpoint.
+Browser preview mode requires a local harness executable and a reachable Chrome DevTools Protocol endpoint. The core analyzer does not need this.
+
+Minimum requirements for browser preview:
+
+1. Install or provide `browser-harness-win`.
+2. Start Chrome/Edge with a reachable Chrome DevTools Protocol endpoint.
+3. Set `BU_CDP_URL` to that endpoint.
+4. Log in to Naver SmartStore seller-center in that browser.
+5. Confirm the app status endpoint reports `READY` before clicking the preview button.
 
 Example:
 
 ```bash
 export BROWSER_HARNESS_WIN_BIN=/path/to/browser-harness-win
 export BU_CDP_URL=http://127.0.0.1:9223
+```
+
+Manual smoke test:
+
+```bash
+browser-harness-win <<'PY'
+print(page_info())
+PY
+```
+
+App-level readiness check after the backend is running:
+
+```bash
+curl http://localhost:8000/api/smartstore/browser-harness/status
+```
+
+Expected success shape:
+
+```json
+{
+  "status": "READY",
+  "message": "browser-harness와 Chrome DevTools endpoint가 정상 동작합니다. 스마트스토어 preview 기능을 사용할 수 있습니다.",
+  "harness_bin": "/path/to/browser-harness-win",
+  "cdp_url": "http://127.0.0.1:9223",
+  "browser": "Chrome/...",
+  "current_url": "https://sell.smartstore.naver.com/...",
+  "page_title": "네이버 스마트스토어센터",
+  "setup_steps": []
+}
 ```
 
 In WSL/Windows setups, `BU_CDP_URL` may need to point to the Windows host IP or a forwarded localhost port. Keep this as an environment variable; do not hardcode private machine IPs in public code.
