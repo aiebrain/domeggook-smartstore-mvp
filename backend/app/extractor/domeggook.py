@@ -387,6 +387,30 @@ def _extract_detail_images(
     )
     search_roots = detail_scopes or [soup]
     thumbnail_folder = _upload_item_folder(thumbnail_url or "")
+
+    # Domeggook often stores the real seller detail HTML inside
+    # textarea#contentsBuffer. Depending on Python/html.parser versions,
+    # BeautifulSoup may or may not expose that inner HTML as normal child img
+    # nodes in the outer tree. Parse the textarea source explicitly so detail
+    # image extraction stays deterministic across local and CI environments.
+    for selector in ["textarea#contentsBuffer", "#contentsBuffer"]:
+        node = soup.select_one(selector)
+        if not node:
+            continue
+        raw_html = node.string if node.string is not None else node.decode_contents()
+        detail_soup = BeautifulSoup(raw_html or "", "html.parser")
+        for img in detail_soup.find_all("img"):
+            src = img.get("src") or img.get("data-src") or img.get("data-original")
+            if not src:
+                continue
+            absolute = _absolute_url(str(src), base_url)
+            lowered = absolute.lower()
+            if any(token in lowered for token in bad_tokens):
+                continue
+            if "thumb" in lowered or "_stt_150" in lowered:
+                continue
+            urls.append(absolute)
+
     for root in search_roots:
         for img in root.find_all("img"):
             if any(img.find_parent(selector) for selector in bad_ancestor_selectors):
